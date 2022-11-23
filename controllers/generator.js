@@ -2,6 +2,9 @@ const querystring = require('query-string');
 const request = require('request')
 const axios = require('axios')
 const Buffer = require('buffer/').Buffer
+const formidable = require('formidable')
+const { parseOnly } = require('../helpers/forms');
+const { response } = require('express');
 
 exports.login = async (req, res) => {
   try {
@@ -13,8 +16,6 @@ exports.login = async (req, res) => {
       scope: process.env.SPOTIFY_SCOPES,
       redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
     }));
-
-    console.log('HELLO')
     
   } catch (error) {
     console.log(error)
@@ -42,9 +43,63 @@ exports.callback = async (req, res) => {
   }
 
   request.post(authOptions, function(error, response, body) {
-    console.log(body)
+    // console.log(body)
     let access_token = body.access_token
 
     return res.redirect(`${process.env.SPOTIFY_FRONTEND_URI}?token=${access_token}`)
   })
+}
+
+exports.playlistTracks = async (req, res) => {
+
+  const form = formidable({ multiples: true })
+
+  form.parse(req, async (err, fields, files) => {
+    
+    parseOnly(fields)
+
+    const headerOptions = {
+      Accept: 'application/json',
+      ContentType: 'application/json',
+      Authorization: `Bearer ${fields.token}`,
+    }
+
+    const id = fields.id
+    const total = fields.totalTracks
+    let offset = 0
+    let tracks = []
+  
+    while(offset <= total){
+
+      try {
+        
+        const response = await axios.get(`https://api.spotify.com/v1/playlists/${id}/tracks?limit=100&offset=${offset}`, {headers: headerOptions})
+
+        offset = 100 + offset
+
+        tracks = [...tracks, ...response.data.items]
+        
+      } catch (error) {
+        console.log(error.response)
+
+        if(error.response.data){
+          if(error.response.data.error){
+            if(error.response.data.error.status === 401){
+              return res.status(401).json(error.response.data.error.message)
+            }
+          }
+        }
+
+        return res.status(400).json(error.response.data ? error.response.data : 'Error with spotify service')
+        
+      }
+
+    }
+
+    console.log('TRACKS', tracks.length)
+
+    return res.json(tracks)
+
+  })
+  
 }
