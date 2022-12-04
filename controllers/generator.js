@@ -90,6 +90,14 @@ exports.playlistTracks = async (req, res) => {
           }
         }
 
+        if(error.response.data){
+          if(error.response.data.error){
+            if(error.response.data.error.status === 429){
+              return res.status(429).json(error.response.data.error.message)
+            }
+          }
+        }
+
         return res.status(400).json(error.response.data ? error.response.data : 'Error with spotify service')
         
       }
@@ -138,6 +146,14 @@ exports.createPlaylist = (req, res) => {
               if(error.response.data.error){
                 if(error.response.data.error.status === 401){
                   return res.status(401).json(error.response.data.error.message)
+                }
+              }
+            }
+
+            if(error.response.data){
+              if(error.response.data.error){
+                if(error.response.data.error.status === 429){
+                  return res.status(429).json(error.response.data.error.message)
                 }
               }
             }
@@ -202,6 +218,14 @@ exports.createPlaylist = (req, res) => {
           }
         }
       }
+
+      if(error.response.data){
+        if(error.response.data.error){
+          if(error.response.data.error.status === 429){
+            return res.status(429).json(error.response.data.error.message)
+          }
+        }
+      }
       
       return res.status(400).json(error.response ? error.response.data : 'Error creating playlist')
       
@@ -227,6 +251,14 @@ exports.createPlaylist = (req, res) => {
           if(error.response.data.error){
             if(error.response.data.error.status === 401){
               return res.status(401).json(error.response.data.error.message)
+            }
+          }
+        }
+
+        if(error.response.data){
+          if(error.response.data.error){
+            if(error.response.data.error.status === 429){
+              return res.status(429).json(error.response.data.error.message)
             }
           }
         }
