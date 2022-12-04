@@ -4,7 +4,7 @@ const axios = require('axios')
 const Buffer = require('buffer/').Buffer
 const formidable = require('formidable')
 const { parseOnly } = require('../helpers/forms');
-const { response } = require('express');
+const { sortByKey } = require('../helpers/sort')
 
 exports.login = async (req, res) => {
   try {
@@ -96,8 +96,6 @@ exports.playlistTracks = async (req, res) => {
 
     }
 
-    console.log('TRACKS', tracks.length)
-
     return res.json(tracks)
 
   })
@@ -120,36 +118,82 @@ exports.createPlaylist = (req, res) => {
 
     let uris = []
 
+    if(fields.tracks){
+
+      let tracks = fields.tracks
+
+      await Promise.all(fields.tracks.map( async (item, index) => {
+          try {
+      
+            const responseAudioFeatures = await axios.get(`https://api.spotify.com/v1/audio-features/${item.track.id}`, 
+              { headers: headerOptions }
+            )
+            
+            tracks[index].track.key = responseAudioFeatures.data.key
+            
+          } catch (error) {
+            console.log(error.response ? error.response.data : error)
+
+            if(error.response.data){
+              if(error.response.data.error){
+                if(error.response.data.error.status === 401){
+                  return res.status(401).json(error.response.data.error.message)
+                }
+              }
+            }
+            
+            return res.status(400).json(error.response ? error.response.data : 'Error getting track audio features')
+
+          }
+      }))
+
+      fields.tracks = tracks
+      
+    }
+
+
+    
+
     fields.tracks.forEach((item, idx) => {
       if(item.track.uri) uris.push(item.track.uri)
     })
+    
 
-    // console.log(uris.length)
+    const parts = Math.ceil((uris.length / 100))
 
+    let allTracks = new Object()
+
+    for(let i = 0; i < parts; i++ ){
+
+      let end = (i + 1) * 100
+      let start = i * 100
+
+      allTracks[i] = [...uris.slice(start, end)]
+      
+    }
+
+    let playlistCreatedID 
+
+    // parseOnly(fields)
+    // JSON.parse(fields.userID)
+
+    // console.log(fields.userID)
+    
     try {
-        
-      const response = await axios.post(`https://api.spotify.com/v1/users/${fields.userID}/playlists`, 
+
+      const responseCreatedPlaylist = await axios.post(`https://api.spotify.com/v1/users/${JSON.parse(fields.userID)}/playlists`, 
         {
-          name: fields.playlistName,
+          name: JSON.parse(fields.playlistName),
           description: ''
         },
         { headers: headerOptions }
       )
 
-      if(response.data.id){
-        
-        const responseAddItems = await axios.post(`https://api.spotify.com/v1/playlists/${response.data.id}/tracks`, 
-          { "uris": uris }, 
-          { headers: headerOptions }
-        )
-        
-      }
-
-      return res.json('Playlist was generated')
-
+      playlistCreatedID = responseCreatedPlaylist.data.id
       
     } catch (error) {
-      console.log(error.response)
+      
+      console.log(error.response ? error.response.data : error)
 
       if(error.response.data){
         if(error.response.data.error){
@@ -158,11 +202,43 @@ exports.createPlaylist = (req, res) => {
           }
         }
       }
-
-      return res.status(400).json(error.response.data ? error.response.data : 'Error with spotify service')
+      
+      return res.status(400).json(error.response ? error.response.data : 'Error creating playlist')
       
     }
 
+    await Promise.all(Object.keys(allTracks).map( async (item, index) => {
+      
+      try {
+
+        if( playlistCreatedID ){
+          
+          const responseAddItems = await axios.post(`https://api.spotify.com/v1/playlists/${playlistCreatedID}/tracks`, 
+            { "uris": allTracks[item] }, 
+            { headers: headerOptions }
+          )
+          
+        }
+        
+      } catch (error) {
+        console.log(error.response ? error.response.data : error)
+
+        if(error.response.data){
+          if(error.response.data.error){
+            if(error.response.data.error.status === 401){
+              return res.status(401).json(error.response.data.error.message)
+            }
+          }
+        }
+
+        return res.status(400).json(error.response.data ? error.response.data : 'Error with updating generated playlist')
+        
+      }
+      
+    }))
+    
+    return res.json('Playlist was generated')
+    
   })
   
 }
