@@ -110,6 +110,18 @@ exports.playlistTracks = async (req, res) => {
   
 }
 
+const groupBy = (xs, key) => {
+    
+  return xs.reduce( function(rv, x) {
+    
+    (rv[x[key]] = rv[x[key]] || []).push(x);
+
+    return rv;
+
+  }, {});
+
+};
+
 exports.createPlaylist = (req, res) => {
 
   const form = formidable({ multiples: true })
@@ -124,7 +136,7 @@ exports.createPlaylist = (req, res) => {
       Authorization: `Bearer ${fields.token}`,
     }
 
-    let uris = []
+   
 
     if(fields.tracks){
 
@@ -167,13 +179,41 @@ exports.createPlaylist = (req, res) => {
       
     }
 
-
-    
+    let allUnsortedTracks = []
 
     fields.tracks.forEach((item, idx) => {
-      if(item.track.uri) uris.push(item.track.uri)
+      if(item.track) allUnsortedTracks.push(item.track)
     })
-    
+
+    let tracksSorted = []
+    let keyCount = 0
+
+    while(allUnsortedTracks.length > 0){
+
+      if(keyCount == 12){
+        keyCount = 0
+        continue
+      }
+
+      if (allUnsortedTracks.filter(e => e.key === keyCount).length > 0) {
+        
+        let items = allUnsortedTracks.filter(e => e.key === keyCount)
+        tracksSorted.push(items[0])
+        
+        allUnsortedTracks = allUnsortedTracks.filter(e => e.id !== items[0].id)
+        keyCount = keyCount + 1
+        
+      } else {
+        keyCount = keyCount + 1
+      }
+      
+    }
+
+    let uris = []
+
+    tracksSorted.forEach((item, idx) => {
+      if(item.uri) uris.push(item.uri)
+    })
 
     const parts = Math.ceil((uris.length / 100))
 
@@ -189,11 +229,6 @@ exports.createPlaylist = (req, res) => {
     }
 
     let playlistCreatedID 
-
-    // parseOnly(fields)
-    // JSON.parse(fields.userID)
-
-    // console.log(fields.userID)
     
     try {
 
